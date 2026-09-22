@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eventtrader}
+      POSTGRES_DB: ${POSTGRES_DB:-eventtrader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=8)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  dashboard:
+    build: .
+    # Only public configuration belongs in the dashboard process.
+    environment:
+      TRADING_MODE: ${TRADING_MODE:-PAPER}
+      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
+      STARTING_CAPITAL_USD: ${STARTING_CAPITAL_USD:-50}
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      EVENTTRADER_API_URL: http://api:8000
+    command: ["streamlit", "run", "src/eventtrader/dashboard/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    ports:
+      - "127.0.0.1:8501:8501"
+
+volumes:
+  postgres_data:

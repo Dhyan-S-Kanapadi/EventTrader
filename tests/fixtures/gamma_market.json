@@ -1,0 +1,16 @@
+{
+  "id": "703257",
+  "slug": "will-the-us-confirm-that-aliens-exist-before-2027-789-924-249",
+  "question": "Will the US confirm that aliens exist before 2027?",
+  "conditionId": "0x747dc809fb79e1b05be09c42d6179459a58de2ef3e40f02484a4e1260f741f75",
+  "outcomes": "[\"Yes\", \"No\"]",
+  "clobTokenIds": "[\"107505882767731489358349912513945399560393482969656700824895970500493757150417\", \"7305630249804085635496399869905769372294302716159034447326228509068694952392\"]",
+  "active": true,
+  "closed": false,
+  "archived": false,
+  "acceptingOrders": true,
+  "enableOrderBook": true,
+  "endDate": "2027-01-01T00:00:00Z",
+  "feesEnabled": true,
+  "feeSchedule": {"rate": 0.04, "exponent": 1, "takerOnly": true, "rebateRate": 0.25}
+}
