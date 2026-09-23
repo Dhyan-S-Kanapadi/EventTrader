@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -99,3 +100,74 @@ class SnapshotRow(Base):
     fee_taker_only: Mapped[bool | None] = mapped_column(Boolean)
     fee_rebate_rate: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
     raw_payload_hash: Mapped[str] = mapped_column(String(64))
+
+
+class EvidenceRow(Base):
+    __tablename__ = "evidence_documents"
+    __table_args__ = (
+        UniqueConstraint("market_id", "content_hash", name="uq_evidence_market_hash"),
+        Index("ix_evidence_market_retrieved", "market_id", "retrieved_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    market_id: Mapped[UUID] = mapped_column(ForeignKey("markets.id"))
+    source_url: Mapped[str] = mapped_column(Text)
+    publisher: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    extracted_text: Mapped[str] = mapped_column(Text)
+    source_type: Mapped[str] = mapped_column(String(32))
+    trust_level: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ResearchReportRow(Base):
+    __tablename__ = "research_reports"
+    __table_args__ = (
+        UniqueConstraint("graph_run_id", name="uq_research_report_graph_run"),
+        Index("ix_research_report_market_created", "market_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    market_id: Mapped[UUID] = mapped_column(ForeignKey("markets.id"))
+    graph_run_id: Mapped[UUID] = mapped_column(default=uuid4)
+    model_role: Mapped[str] = mapped_column(String(32))
+    model_name: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[str] = mapped_column(String(32))
+    estimated_probability: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    maximum_entry_price: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    recommendation: Mapped[str] = mapped_column(String(16))
+    counterarguments: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    resolution_interpretation: Mapped[str | None] = mapped_column(Text)
+    analysis_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    total_research_cost_usd: Mapped[Decimal] = mapped_column(Numeric(18, 8))
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    reason_codes: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    graph_stages: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list)
+    result_payload: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LLMUsageRow(Base):
+    __tablename__ = "llm_usage"
+    __table_args__ = (
+        Index("ix_llm_usage_graph_run", "graph_run_id"),
+        Index("ix_llm_usage_created", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    graph_run_id: Mapped[UUID]
+    research_report_id: Mapped[UUID | None] = mapped_column(ForeignKey("research_reports.id"))
+    model_role: Mapped[str] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(64))
+    model_name: Mapped[str] = mapped_column(Text)
+    input_tokens: Mapped[int] = mapped_column(Integer)
+    output_tokens: Mapped[int] = mapped_column(Integer)
+    latency_ms: Mapped[int] = mapped_column(Integer)
+    estimated_cost_usd: Mapped[Decimal] = mapped_column(Numeric(18, 8))
+    success: Mapped[bool] = mapped_column(Boolean)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

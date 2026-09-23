@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 
 from eventtrader.api.markets import router as markets_router
+from eventtrader.api.research import router as research_router
 from eventtrader.domain.status import HealthStatus, ReadinessStatus
 from eventtrader.logging import configure_logging
 from eventtrader.orchestration.graph import build_status_graph
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = Settings()
     configure_logging(settings.log_level)
     app.state.graph_ready = build_status_graph().invoke({})["status"] == "ok"
+    app.state.settings = settings
     app.state.engine = create_database_engine(settings)
     logger.info("application_started")
     try:
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="EventTrader", version="0.1.0", lifespan=lifespan)
 app.include_router(markets_router)
+app.include_router(research_router)
 
 
 @app.get("/health", response_model=HealthStatus)

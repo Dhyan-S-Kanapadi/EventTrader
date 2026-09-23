@@ -40,6 +40,23 @@ class Settings(BaseSettings):
     provider_max_backoff_seconds: float = Field(default=10, gt=0, le=60)
     provider_page_size: int = Field(default=50, ge=1, le=100)
 
+    model_mode: Literal["disabled", "mock", "litellm"] = "disabled"
+    extraction_model: str = ""
+    research_model: str = ""
+    critic_model: str = ""
+    fallback_model: str = ""
+    extraction_expected_cost_usd: Decimal = Field(default=Decimal("0.001"), ge=0)
+    research_expected_cost_usd: Decimal = Field(default=Decimal("0.02"), ge=0)
+    critic_expected_cost_usd: Decimal = Field(default=Decimal("0.01"), ge=0)
+    research_per_call_budget_usd: Decimal = Field(default=Decimal("0.05"), gt=0)
+    research_daily_budget_usd: Decimal = Field(default=Decimal("0.25"), gt=0)
+    research_timeout_seconds: float = Field(default=30, gt=0, le=120)
+    research_slippage_bps: Decimal = Field(default=Decimal("50"), ge=0, le=1000)
+    evidence_max_bytes: int = Field(default=200_000, ge=1_000, le=1_000_000)
+    evidence_max_age_hours: int = Field(default=168, ge=1, le=2160)
+    snapshot_max_age_minutes: int = Field(default=60, ge=1, le=1440)
+    rss_feed_urls: str = ""
+
     @field_validator("live_trading_enabled", mode="before")
     @classmethod
     def parse_disabled_flag(cls, value: object) -> object:

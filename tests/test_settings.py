@@ -33,6 +33,7 @@ def test_safe_defaults_and_risk_limits():
         assert getattr(settings, field) == Decimal(value)
     assert settings.max_simultaneous_markets == 3
     assert settings.max_trades_per_day == 5
+    assert settings.research_slippage_bps == Decimal("50")
 
 
 @pytest.mark.parametrize(
