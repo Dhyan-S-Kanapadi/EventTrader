@@ -24,6 +24,7 @@ from eventtrader.domain.markets import (
     Outcome,
     Price,
 )
+from eventtrader.domain.paper import SettlementInstruction
 from eventtrader.market_data.provider import (
     InvalidResponse,
     MarketNotFound,
@@ -36,6 +37,7 @@ from eventtrader.settings import Settings
 logger = logging.getLogger(__name__)
 GAMMA = "https://gamma-api.polymarket.com"
 CLOB = "https://clob.polymarket.com"
+DATA_API = "https://data-api.polymarket.com"
 
 
 def payload_hash(payload: object) -> str:
@@ -93,6 +95,22 @@ class GammaMarket(BaseModel):
 class GammaPage(BaseModel):
     markets: list[dict[str, Any]]
     next_cursor: str | None = None
+
+
+class ResolutionRow(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    condition_id: str
+    status: str
+    payouts: list[Decimal]
+    resolved_at: datetime | None = None
+    resolution_source: str | None = None
+
+    @field_validator("resolved_at")
+    @classmethod
+    def normalize_resolved_at(cls, value: datetime | None) -> datetime | None:
+        if value is None or value.tzinfo is None:
+            return None
+        return value.astimezone(UTC)
 
 
 class ClobBook(BaseModel):
@@ -287,6 +305,39 @@ class PolymarketReadOnlyClient:
         if (market.slug if by_slug else market.external_market_id) != identifier:
             raise InvalidResponse("market_identity_mismatch", request_id)
         return market
+
+    async def get_resolution(
+        self, condition_id: str, outcome_count: int
+    ) -> SettlementInstruction | None:
+        payload, request_id = await self._get(
+            f"{DATA_API}/v2/resolutions", {"condition": condition_id}
+        )
+        try:
+            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                raise ValueError("Invalid resolution envelope")
+            rows = [
+                ResolutionRow.model_validate(item)
+                for item in payload["data"]
+                if isinstance(item, dict) and item.get("condition_id") == condition_id
+            ]
+            if len(rows) != 1:
+                return None
+            row = rows[0]
+            if (
+                row.resolved_at is None
+                or len(row.payouts) != outcome_count
+                or sum(value == Decimal("1") for value in row.payouts) != 1
+                or any(value not in {Decimal("0"), Decimal("1")} for value in row.payouts)
+            ):
+                return None
+            return SettlementInstruction(
+                condition_id=condition_id,
+                payouts=row.payouts,
+                resolved_at=row.resolved_at,
+                source=row.resolution_source or "Polymarket Data API v2",
+            )
+        except (ValidationError, ValueError, TypeError):
+            raise InvalidResponse("invalid_resolution_response", request_id) from None
 
     async def get_orderbook(self, token_id: str) -> OrderBook:
         if not token_id.isdecimal():

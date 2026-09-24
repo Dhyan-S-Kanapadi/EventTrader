@@ -1,6 +1,6 @@
 # Read-only Polymarket contract
 
-Official sources reviewed on 2026-09-21:
+Official sources reviewed through 2026-09-24:
 
 - [REST APIs and authentication](https://docs.polymarket.com/getting-started/api)
 - [Current Python SDK](https://docs.polymarket.com/getting-started/python)
@@ -10,6 +10,8 @@ Official sources reviewed on 2026-09-21:
 - [Market details and fee schedule](https://docs.polymarket.com/market-data/market-details)
 - [Order-book API](https://docs.polymarket.com/api-reference/market-data/get-order-book)
 - [Book structure and outcome tokens](https://docs.polymarket.com/market-data/prices-order-books)
+- [Resolution state](https://docs.polymarket.com/api-reference/markets/get-resolution-state)
+- [Trading fees](https://help.polymarket.com/en/articles/13364478-trading-fees)
 
 The official Python distribution is `polymarket-client`, importing `polymarket`.
 This milestone uses the existing `httpx` dependency directly instead of installing
@@ -22,6 +24,7 @@ made, without authentication headers, wallet code, redirects, or provider secret
 | Detail by ID | `GET https://gamma-api.polymarket.com/markets/{id}` |
 | Detail by slug | `GET https://gamma-api.polymarket.com/markets/slug/{slug}` |
 | Outcome book | `GET https://clob.polymarket.com/book?token_id={token_id}` |
+| Resolution | `GET https://data-api.polymarket.com/v2/resolutions?condition={condition_id}` |
 
 Discovery follows `next_cursor` until exhausted or the requested limit is reached.
 Repeated cursors and pages without progress fail explicitly. Each invocation is
@@ -46,11 +49,13 @@ documented fields used by this integration and ignore unrelated future fields.
 - Best bid is the maximum positive-size bid; best ask is the minimum positive-size
   ask. Array order is not trusted. Spread and midpoint require both sides. Empty
   sides remain null; crossed books and invalid prices fail validation.
-- `min_order_size` and `tick_size` come from the token's CLOB book. They are
-  observations, not an implemented order validator. No fill is calculated.
+- `min_order_size` and `tick_size` come from the token's CLOB book. Normalized
+  positive bid and ask levels are persisted by snapshot for deterministic paper fills.
 - Gamma `feeSchedule.rate` is a fee-curve parameter, not a flat percentage. The
   exponent, taker-only flag, rebate fraction, and `feesEnabled` are retained.
   Missing schedules remain unknown; only explicit `feesEnabled=false` yields zero.
+  Paper taker fills use `shares * fee_rate * price * (1 - price)` per consumed level
+  and round the aggregate fee to five decimal places.
 - Liquidity and total volume come from Gamma and are market-wide. They repeat on
   each outcome snapshot and must not be summed across outcomes. Open interest is
   null because the selected endpoints do not supply it. Categories are not guessed.

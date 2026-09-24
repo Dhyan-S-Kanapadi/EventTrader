@@ -171,3 +171,108 @@ class LLMUsageRow(Base):
     success: Mapped[bool] = mapped_column(Boolean)
     error_code: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OrderBookLevelRow(Base):
+    __tablename__ = "orderbook_levels"
+    __table_args__ = (
+        UniqueConstraint(
+            "market_snapshot_id", "side", "level_index", name="uq_orderbook_snapshot_side_level"
+        ),
+        Index("ix_orderbook_snapshot_side", "market_snapshot_id", "side", "level_index"),
+        CheckConstraint("price BETWEEN 0 AND 1", name="ck_orderbook_level_price"),
+        CheckConstraint("size > 0", name="ck_orderbook_level_size"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    market_snapshot_id: Mapped[UUID] = mapped_column(ForeignKey("market_snapshots.id"))
+    side: Mapped[str] = mapped_column(String(8))
+    price: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    size: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    level_index: Mapped[int] = mapped_column(Integer)
+
+
+class PaperOrderRow(Base):
+    __tablename__ = "paper_orders"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_paper_order_idempotency"),
+        UniqueConstraint("trade_proposal_id", "side", name="uq_paper_order_proposal_side"),
+        Index("ix_paper_order_market_created", "market_id", "created_at"),
+        Index("ix_paper_order_status", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    trade_proposal_id: Mapped[UUID] = mapped_column(ForeignKey("research_reports.id"))
+    market_id: Mapped[UUID] = mapped_column(ForeignKey("markets.id"))
+    outcome_token_id: Mapped[str] = mapped_column(Text)
+    side: Mapped[str] = mapped_column(String(8))
+    order_type: Mapped[str] = mapped_column(String(16))
+    limit_price: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    requested_size_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    requested_shares: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    status: Mapped[str] = mapped_column(String(32))
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    rejection_reason: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PaperFillRow(Base):
+    __tablename__ = "paper_fills"
+    __table_args__ = (Index("ix_paper_fill_order_filled", "paper_order_id", "filled_at"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    paper_order_id: Mapped[UUID] = mapped_column(ForeignKey("paper_orders.id"))
+    fill_price: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    filled_shares: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    filled_notional_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    estimated_fee_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    estimated_spread_cost_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    estimated_slippage_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    filled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PaperPositionRow(Base):
+    __tablename__ = "paper_positions"
+    __table_args__ = (
+        UniqueConstraint(
+            "market_id", "outcome_token_id", "side", name="uq_paper_position_market_token_side"
+        ),
+        Index("ix_paper_position_status", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    market_id: Mapped[UUID] = mapped_column(ForeignKey("markets.id"))
+    outcome_token_id: Mapped[str] = mapped_column(Text)
+    side: Mapped[str] = mapped_column(String(8))
+    quantity_shares: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    average_entry_price: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    cost_basis_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    realized_pnl_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    unrealized_pnl_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    allocated_research_cost_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    current_mark_price: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    trade_proposal_id: Mapped[UUID] = mapped_column(ForeignKey("research_reports.id"))
+    status: Mapped[str] = mapped_column(String(16))
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PortfolioEventRow(Base):
+    __tablename__ = "portfolio_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_type", "reference_type", "reference_id", name="uq_portfolio_event_reference"
+        ),
+        Index("ix_portfolio_event_created", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    event_type: Mapped[str] = mapped_column(String(32))
+    reference_type: Mapped[str] = mapped_column(String(32))
+    reference_id: Mapped[UUID]
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    balance_after_usd: Mapped[Decimal] = mapped_column(Numeric(38, 18))
+    event_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

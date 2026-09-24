@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 
 from eventtrader.api.markets import router as markets_router
+from eventtrader.api.paper import router as paper_router
 from eventtrader.api.research import router as research_router
 from eventtrader.domain.status import HealthStatus, ReadinessStatus
 from eventtrader.logging import configure_logging
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="EventTrader", version="0.1.0", lifespan=lifespan)
 app.include_router(markets_router)
+app.include_router(paper_router)
 app.include_router(research_router)
 
 

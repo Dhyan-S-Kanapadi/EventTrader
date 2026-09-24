@@ -7,8 +7,20 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from eventtrader.domain.markets import Market, MarketRead, OutcomeRead, SnapshotRead, SnapshotValues
-from eventtrader.persistence.models import MarketRow, OutcomeRow, SnapshotRow
+from eventtrader.domain.markets import (
+    BookLevel,
+    Market,
+    MarketRead,
+    OutcomeRead,
+    SnapshotRead,
+    SnapshotValues,
+)
+from eventtrader.persistence.models import (
+    MarketRow,
+    OrderBookLevelRow,
+    OutcomeRow,
+    SnapshotRow,
+)
 
 
 class MarketRepository:
@@ -67,7 +79,15 @@ class MarketRepository:
             )
         return market_id
 
-    def add_snapshot(self, market_id: UUID, token_id: str, snapshot: SnapshotValues) -> UUID:
+    def add_snapshot(
+        self,
+        market_id: UUID,
+        token_id: str,
+        snapshot: SnapshotValues,
+        *,
+        bids: list[BookLevel] | None = None,
+        asks: list[BookLevel] | None = None,
+    ) -> UUID:
         outcome_id = self.session.execute(
             select(OutcomeRow.id).where(
                 OutcomeRow.market_id == market_id,
@@ -77,6 +97,18 @@ class MarketRepository:
         row = SnapshotRow(market_id=market_id, outcome_id=outcome_id, **snapshot.model_dump())
         self.session.add(row)
         self.session.flush()
+        for side, levels in (("BID", bids or []), ("ASK", asks or [])):
+            self.session.add_all(
+                OrderBookLevelRow(
+                    market_snapshot_id=row.id,
+                    side=side,
+                    price=level.price,
+                    size=level.size,
+                    level_index=index,
+                )
+                for index, level in enumerate(levels)
+                if level.size > 0
+            )
         return row.id
 
     def get_market(self, market_id: UUID) -> MarketRead | None:

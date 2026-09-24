@@ -218,3 +218,60 @@ def test_invalid_json_is_not_retried():
                 await client.get_market_details("703257")
 
     asyncio.run(run())
+
+
+def test_resolution_contract_accepts_only_unambiguous_final_payout():
+    condition_id = "0xresolved"
+
+    def handler(request):
+        assert request.url.path == "/v2/resolutions"
+        assert dict(request.url.params) == {"condition": condition_id}
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "condition_id": condition_id,
+                        "status": "resolved",
+                        "payouts": ["1", "0"],
+                        "resolved_at": "2026-09-24T00:00:00Z",
+                        "resolution_source": "https://example.org/final",
+                    }
+                ]
+            },
+        )
+
+    async def run():
+        async with PolymarketReadOnlyClient(
+            Settings(), transport=httpx.MockTransport(handler)
+        ) as client:
+            resolution = await client.get_resolution(condition_id, 2)
+            assert resolution is not None
+            assert resolution.payouts == [Decimal("1"), Decimal("0")]
+            assert resolution.source == "https://example.org/final"
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("payouts", [["0.5", "0.5"], ["1", "1"], ["1"]])
+def test_resolution_contract_abstains_on_ambiguous_payout(payouts):
+    condition_id = "0xambiguous"
+    payload = {
+        "data": [
+            {
+                "condition_id": condition_id,
+                "status": "resolved",
+                "payouts": payouts,
+                "resolved_at": "2026-09-24T00:00:00Z",
+            }
+        ]
+    }
+
+    async def run():
+        async with PolymarketReadOnlyClient(
+            Settings(),
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload)),
+        ) as client:
+            assert await client.get_resolution(condition_id, 2) is None
+
+    asyncio.run(run())

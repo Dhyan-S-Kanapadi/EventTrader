@@ -3,8 +3,8 @@
 EventTrader is a controlled Polymarket research system in **paper mode only**.
 It persists public market data and evidence, runs a bounded LangGraph research
 workflow, meters every model attempt, and sends structured proposals through
-deterministic cost and risk checks. It cannot create an order: there is no wallet,
-signing key, order route, or execution adapter.
+deterministic cost, risk, and paper-execution checks. Paper fills consume stored
+public order-book depth. There is no wallet, signing key, or provider order route.
 
 ## Start locally with Docker
 
@@ -48,6 +48,31 @@ Invoke-RestMethod 'http://localhost:8000/llm-usage'
 The mock result is a workflow demonstration, not a market claim. Research can return
 `APPROVED_FOR_PAPER`, `REJECTED`, or `RESEARCH_UNAVAILABLE`; none creates an
 order.
+
+
+Execute an approved proposal in the internal paper ledger only:
+
+```powershell
+$reports = Invoke-RestMethod 'http://localhost:8000/research-runs?limit=100'
+$report = $reports | Where-Object status -eq 'APPROVED_FOR_PAPER' | Select-Object -First 1
+$proposal = $report.result_payload.proposal
+$orderBody = @{
+  trade_proposal_id = $report.id
+  side = 'BUY'
+  limit_price = [string]$proposal.maximum_entry_price
+  requested_size_usd = '2.50'
+  idempotency_key = "manual-$($report.id)-buy"
+  expires_at = (Get-Date).ToUniversalTime().AddHours(1).ToString('o')
+} | ConvertTo-Json
+Invoke-RestMethod -Method Post -ContentType 'application/json' -Body $orderBody 'http://localhost:8000/paper/orders'
+Invoke-RestMethod -Method Post 'http://localhost:8000/paper/portfolio/mark'
+Invoke-RestMethod 'http://localhost:8000/paper/portfolio'
+```
+
+The Paper Trading dashboard provides the same explicit action. Resolution reconciliation
+is manual and read-only: `Invoke-RestMethod -Method Post
+'http://localhost:8000/paper/portfolio/reconcile-resolutions'`. It settles only an
+unambiguous official payout vector and otherwise records a warning.
 
 ## Local Python startup
 
@@ -98,5 +123,6 @@ size and timeout, sanitized before model use, and retained with URL, timestamps,
 content hash. Inline development evidence must be explicitly marked low-trust.
 
 See [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md),
-[docs/POLYMARKET_DATA.md](docs/POLYMARKET_DATA.md), and
-[docs/RESEARCH.md](docs/RESEARCH.md).
+[docs/POLYMARKET_DATA.md](docs/POLYMARKET_DATA.md),
+[docs/RESEARCH.md](docs/RESEARCH.md), and
+[docs/PAPER_TRADING.md](docs/PAPER_TRADING.md).

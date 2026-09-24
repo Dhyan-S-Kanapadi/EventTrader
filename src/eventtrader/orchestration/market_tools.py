@@ -69,4 +69,6 @@ async def sync_market_snapshot(
         ).hexdigest(),
     )
     with Session(engine) as session, session.begin():
-        return MarketRepository(session).add_snapshot(market_id, token_id, snapshot)
+        return MarketRepository(session).add_snapshot(
+            market_id, token_id, snapshot, bids=book.bids, asks=book.asks
+        )
